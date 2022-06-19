@@ -10,6 +10,6 @@
 * Company can target Sundays and let people know that on average people take less steps and burn less calories on Sundays. Company could target in their marketing that Sundays could be used to work on improving health. 
 * Increase in the sampling size for weight and other data could have provided better insights into the effect of daily activities on weight, BMI, and heart rate. This could also be used to guide maketing strategy. 
 
-#### Citation
+#### Citations
 Furberg, R., Brinton, J., Keating, M., & Ortiz, A. (2016). Crowd-sourced Fitbit datasets 03.12.2016-05.12.2016 [Fitbase Data 3.12.16-4.11.16]. Zenodo. https://doi.org/10.5281/zenodo.53894
 https://www.kaggle.com/arashnic/fitbit
