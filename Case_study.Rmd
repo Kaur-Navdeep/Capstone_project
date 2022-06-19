@@ -1,0 +1,451 @@
+---
+title: "Bellabelt Case Study"
+author: "Navdeep Kaur"
+date: "5/25/2022"
+output: html_document
+---
+
+# Analysis and visualization of fitbit's consumer data to guide marketing strategy for Bellabelt 
+
+## Ask
+
+* Finding trends in fitbits's consumer data sets and using those trends to guide Bellabelt company's marketing strategy.
+* The product focused is __Leaf__
+* Key stakeholders: Urška Sršen(Cofounder and CCO), Sando Mur(Cofounder, member of executive team)
+
+## Prepare
+* The data set named "Fitabase Data 4.12.16-5.12.16" was extracted from a kaggle [link](https://www.kaggle.com/arashnic/fitbit), which is a reliable source to get data. The data is originally provided by the 30 fitbit users. The license code is "CC0: Public Domain". Data has been widely used by "Google Data Analytics Professional Certificate" course. It is from 12 April 2016 to 12 May 2016. This data is not very recent, but could serve the purpose. 
+* From this data set particular files for this study are:
++ dailyActivity_merged.csv
++ sleepDay_merged.csv
++ weightLogInfo_merged.csv
++ hourlySteps_merged.csv
++ hourlyIntensities_merged.csv
++ hourlyCalories_merges.csv
+  
+
+#### Setting working directory
+```{r}
+#getwd()
+```
+
+#### Uploading necessary libraries 
+```{r}
+library(tidyverse)
+library(skimr)
+library(janitor)
+library(dplyr)
+library(ggpubr)
+library(lubridate)
+library(corrplot)
+library(circle)
+library(viridis)
+library(ggcorrplot)
+library(viridisLite)
+```
+
+#### Uploading data files 
+
+```{r}
+daily_activity <- read.csv("dailyActivity_merged.csv")
+sleep_day <- read.csv("sleepDay_merged.csv")
+weight <- read.csv("weightLogInfo_merged.csv")
+hourly_steps <- read.csv( "hourlySteps_merged.csv")
+hourly_intensities <- read.csv( "hourlyIntensities_merged.csv")
+hourly_calories <- read.csv("hourlyCalories_merged.csv")
+```
+
+## Process
+
+#### Viewing data set heads
+
+```{r}
+head(daily_activity)
+head(sleep_day)
+head(weight)
+head(hourly_steps)
+head(hourly_intensities)
+head(hourly_calories)
+```
+
+
+```{r}
+n_distinct(daily_activity$Id)
+n_distinct(sleep_day$Id)
+n_distinct(weight$Id)
+n_distinct(hourly_steps$Id)
+n_distinct(hourly_calories$Id)
+n_distinct(hourly_intensities$Id)
+```
+
+
+The sample size for the number of participants is not consistent across all the datasets. Eight sample size is very less to make reliable recommendations. 
+
+#### Summarizing daily activity data   
+
+```{r}
+daily_activity %>%  
+  select(TotalSteps,
+         TotalDistance,
+         SedentaryMinutes) %>%
+  summary()
+
+```
+
+This indicates that there are some rows in the daily_activity dataset which have zero calories and steps per day. This indicates that some users may have skipped using device on those days. 
+
+#### Converting activity date into date format
+
+```{r}
+daily_activity <- daily_activity %>% 
+  mutate(Date = as.Date(ActivityDate, format = '%m/%d/%Y'))
+```
+
+#### Data processing and analysis to compute total minutes and hours of data collected per day per user. This will indicate, how long a user used fitness device. 
+
+```{r}
+
+daily_activity <- daily_activity %>% mutate(TotalMinutes = VeryActiveMinutes + FairlyActiveMinutes + LightlyActiveMinutes+SedentaryMinutes)
+daily_activity <- daily_activity %>% mutate(TotalActiveMinutes = VeryActiveMinutes + FairlyActiveMinutes + LightlyActiveMinutes)
+daily_activity <- daily_activity %>% mutate(TotalHours = TotalMinutes/60)
+
+
+```
+
+#### Graph to represent the usage of fitness device
+
+```{r}
+activity_hours <- daily_activity %>% select(Id, Date, TotalHours)
+ activity_hours$Id <- as.factor(activity_hours$Id)
+
+activity_hours %>% ggplot(aes(Id, Date))+
+  geom_raster(aes(fill = TotalHours))+theme_classic()+scale_fill_viridis_b(direction = -1)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    theme(axis.text=element_text(size=10,face="bold" ),
+        axis.title=element_text(size=14,face="bold"))
+daily_activity <- daily_activity %>% group_by(Id) %>% filter(n() > 28)
+```
+
+This graph indicates that there are few users which have used the device less than 30 days. Also on each day the time the device was being used also varies from person to person. Few users have used device even less than 5 hours in a day. 
+
+```{r}
+device_usage_more_than_20 <- activity_hours%>%count(TotalHours > 20)
+
+device_usage_more_than_20 %>%
+    group_by(`TotalHours > 20`) %>% 
+    summarise(num = n(),
+              total_days = sum(n), percent_device_usage = ((total_days/799)*100))
+
+
+device_usage_less_than_5 <- activity_hours%>%count(TotalHours < 5)
+
+device_usage_less_than_5 %>% 
+    group_by(`TotalHours < 5`) %>% 
+    summarise(num = n(),
+              total_days = sum(n), percent_device_usage = ((total_days/799)*100)) 
+
+```
+
+These calculations indicate that across all the users, 45.93% of time, the participants were wearing the device less than 20 hours per day. Also,  across all the users, only 0.6 percent of time, the participants were wearing the device less than 5 hours per day.
+
+#### Data cleaning to retain only those Ids which have used the fitness device for the full 24 hours
+
+```{r}
+WholeDay <- daily_activity %>% filter(TotalHours == 24)
+n_distinct(WholeDay$Id)
+```
+
+Above findings indicate that 23 users have worn device for 24 hours atleast one day. This WholeDay dataframe will be used for further analysis to prevent any biasness of the data. 
+
+## Data analysis
+
+```{r}
+
+
+
+C1 <- ggcorrplot(cor(daily_activity[,3:15]), type = "lower", lab= TRUE, lab_size = 2) + theme_classic()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ 
+  scale_fill_viridis_b(direction = -1)+   
+  theme(axis.text=element_text(size=9,face="bold" ),
+        axis.title=element_text(size=9,face="bold"))
+
+C2 <- ggcorrplot(cor(WholeDay[,3:15]), type = "lower", lab= TRUE, lab_size = 2) + 
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+ 
+  scale_fill_viridis_b(direction = -1)+   
+  theme(axis.text=element_text(size=9,face="bold" ),
+        axis.title=element_text(size=9,face="bold"))
+
+C1
+C2
+
+
+
+```
+
+The correlation between the calories and total steps (and other variables as well) increased if we are using cleaned data set i.e. only using days in which data is available for 24 hours. 
+
+## Data visualization
+
+```{r}
+ggplot(WholeDay) + geom_point(aes(x = TotalSteps, y = VeryActiveDistance, color = TotalSteps), color = "#0072B2")+ theme_classic( ) +
+  labs(x = "Total number of steps per day", y = "Very Active distance (km)")+ 
+  geom_vline(xintercept = 10000) +  scale_colour_gradient ( "Total number of steps") + 
+  annotate(geom = "text", x = 15000, y = 30, 
+    label = "    After 10000 steps per day, 
+  increase in steps is lineraly associated
+    with very active distance ", hjust = 0, vjust = 1, size = 4) + 
+  geom_smooth(aes(x = TotalSteps, y = VeryActiveDistance), method = loess, formula = 'y ~ x', color = "#E69F00")+
+  theme(axis.text=element_text(size=20,face="bold" ),
+        axis.title=element_text(size=20,face="bold"))
+```
+
+
+```{r}             
+ 
+ggplot(WholeDay, aes(x = VeryActiveMinutes, y = VeryActiveDistance), color = "#0072B2") +geom_point(color = "#0072B2") + theme_classic() + labs(x = "Very active time (minutes)", y = "Very Active distance (km)") + geom_smooth(aes(x = VeryActiveMinutes, y = VeryActiveDistance), method = lm, formula = 'y ~ x', color = "#E69F00") +
+  theme(axis.text=element_text(size=20,face="bold" ),
+        axis.title=element_text(size=20,face="bold"))
+```
+
+This graph indicates that there is linear relationship between very active mintues and very active distance.  
+
+```{r}
+
+ggplot(WholeDay, aes(x = TotalSteps, y = Calories)) + 
+  geom_point(color = "#0072B2") + 
+  theme_classic() + 
+  labs(x = "Total number of steps per day", y = "Calories burnt in a day (Kcal)") + 
+  geom_smooth(aes(x = TotalSteps, y = Calories), method = lm, formula = 'y ~ x', color = "#E69F00") +
+  theme(axis.text=element_text(size=20,face="bold" ),
+        axis.title=element_text(size=20,face="bold"))
+
+
+```
+
+The above graph represents that increase in number of steps per day leads to increase in number of calories burnt. 
+
+#### Processing sleep data
+
+```{r }
+head(sleep_day)
+colnames(sleep_day)
+sleep_day <-  sleep_day %>% separate(SleepDay, into = c("ActivityDate", "Time", "Day period"), sep = " ")
+```
+
+####Merging data based on days and IDs
+
+```{r}
+sleep_activity_bydate <- merge(sleep_day, daily_activity, by=c("Id", "ActivityDate" ))
+colnames(sleep_activity_bydate)
+```
+
+#### Analyzing sleep data
+
+```{r}
+high_light_bydate <- sleep_activity_bydate %>% filter(TotalTimeInBed - TotalMinutesAsleep > 30)
+n_distinct(sleep_activity_bydate$Id)
+n_distinct(high_light_bydate$Id)
+```
+
+```{r}
+sleep_activity_bydate <- sleep_activity_bydate %>% mutate(time_to_sleep = TotalTimeInBed - TotalMinutesAsleep)
+
+time_to_sleep_by_id <- sleep_activity_bydate %>% group_by(Id) %>% summarize(number_of_records = n(), average_time_to_sleep = mean(time_to_sleep), average_distance = mean(TotalDistance))
+time_to_sleep_by_id %>% filter(average_time_to_sleep>30)
+
+percent_people_need_more_than_30_mins_to_sleep <- (8/20)*100
+percent_people_need_more_than_30_mins_to_sleep
+
+```
+
+#### Visualizing data
+
+
+```{r}
+ggplot(time_to_sleep_by_id, aes(x=average_time_to_sleep, y= average_distance))+geom_point(color = "#0072B2")+labs(x = "Average total time requied to fall asleep (minutes)", y = "Average total distance covered in a day (Km)") + theme(axis.text=element_text(size=15,face="bold" ),
+        axis.title=element_text(size=15,face="bold"))+theme_classic()
+
+```
+
+The amount of data provided is less to clarify that increase in distance covered by a person in a day reduces its time to fall asleep.
+
+
+```{r}
+sleep_activity_bydate %>% ggplot( aes(x= TotalMinutesAsleep, y = TotalTimeInBed)) + 
+  geom_point(color = "#0072B2") + 
+  geom_point(data = high_light_bydate, aes(x= TotalMinutesAsleep, y = TotalTimeInBed), color = "#D55E00")+
+  theme_classic() + labs(x = "Total time asleep (minutes)", y = "Total time in bed (minutes)") + 
+  annotate(geom = "text", x = 50, y = 900, 
+    label = "Orange color dots represent 40% of the people who needed more 
+    than 30 mins to fell asleep after being in bed ", hjust = 0, vjust = 1, size = 4) + theme(axis.text=element_text(size=20,face="bold" ),
+        axis.title=element_text(size=20,face="bold"))
+```
+
+```{r}
+ggplot(sleep_activity_bydate, aes(x = TotalMinutesAsleep, y = TotalSteps))+geom_point(color = "#0072B2")+theme_classic()+ labs(x = "Total time asleep (minutes)", y = "Total steps taken in a day")+ 
+  annotate(geom = "text", x = 600, y = 20000, 
+    label = "        This shows that there 
+    is no relationship between
+    number of steps taken in a 
+    day and total time asleep", hjust = 0, vjust = 1, size = 4) + xlim(0, 1000) +
+  theme(axis.text=element_text(size=20,face="bold" ),
+        axis.title=element_text(size=20,face="bold"))
+
+
+
+```
+
+#### Processing weight data
+```{r}
+head(weight)
+colnames(weight)
+n_distinct(weight$Id)
+weight <- weight %>% separate(Date, into = c("ActivityDate", "Time", "period_of_day"), sep = " ")
+```
+
+
+#### Understanding summary statistics
+
+It looks like there may be more participants in the daily activity dataset than the weight dataset.
+
+```{r}
+max(weight$BMI)
+max(weight$WeightKg)
+summary(weight)
+
+above_normal_bmi <- weight %>% filter(BMI>24.9)
+n_distinct(above_normal_bmi$Id)
+
+percent_above_normal_bmi = (5/8)*100 
+
+ggplot(weight, aes(x = WeightKg, y = BMI)) + geom_point(color = "#0072B2")+theme_classic()+ geom_hline(yintercept = 24.9) + geom_text(aes(0, 24.9, label = 24.9, vjust = - 1)) + ylim(0,NA) + labs(x = "Body weight (Kg)", y = "Body Mass Index") + 
+  theme(axis.text=element_text(size=20,face="bold" ), axis.title=element_text(size=20,face="bold"))+
+  annotate("rect", xmin=c(130,0), xmax=c(137,0), ymin=c(45,0) , ymax=c(50,0), alpha=0.2, color = "#D55E00", fill = NA)
+```
+
+Removing one extreme value (in orange square) from the above graph to see enlarged picture of the graph.
+```{r}
+datagraph <- weight %>% filter(BMI<40)
+
+ggplot(datagraph, aes(x = WeightKg, y = BMI)) + geom_jitter(color = "#0072B2") + theme_classic()+   geom_hline(yintercept = 24.9) + geom_text(aes(30, 24.9, label = 24.9, vjust = - 1) )+ xlim(30,100) + annotate(geom = "rect", xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 24.9, fill = "#0072B2", alpha = 0.25) +
+  annotate(geom = "rect", xmin = -Inf, xmax = Inf, ymin = 24.9, ymax = Inf, fill =  "#E69F00", alpha = 0.25) + geom_text(aes(60, 28.0, label = "According to the data, 62.5 percent of the people have 
+    above normal BMI (24.9)"), size = 4, face = "bold", check_overlap =T) + labs(x = "Body weight (Kg)", y = "Body Mass Index") +
+  theme(axis.text=element_text(size=20,face="bold" ),
+        axis.title=element_text(size=20,face="bold"))
+```
+
+#### Merging daily activity, sleep and weight data
+
+```{r observations}
+sleep_wgt_act <- merge(sleep_activity_bydate, weight, by =c ("Id", "ActivityDate"))
+sleep_wgt_act$ActivityDate = as.Date(sleep_wgt_act$ActivityDate, format = '%m/%d/%Y')
+
+
+n_distinct(sleep_wgt_act$Id)
+```
+Merging sleep, weight and activity data leads to a data set with only 5 Ids. 5 is very low sample size, therefore we hold back analyzing this data set.
+
+#### Processing and analyzing hourly data sets to draw conclusions
+```{r}
+hourly_data <- merge(hourly_steps, hourly_calories, by = c("Id", "ActivityHour"))
+hourly_data <- merge(hourly_data, hourly_intensities, by = c("Id", "ActivityHour"))
+n_distinct(hourly_data$Id)
+```
+
+#### Cleaning data to retain only Ids which have more than 700 hours data.
+```{R}
+hourly_data %>% count(Id)
+
+hourly_data <- hourly_data %>% group_by(Id) %>% filter(n() > 700)
+hourly_data %>% count(Id)
+```
+
+```{r}
+hourly_data <- hourly_data %>% 
+ # rename("Date" = "ActivityHour") %>% 
+  mutate(Date = as.Date(ActivityHour, format = '%m/%d/%Y')) %>% 
+  mutate(Time = format(ActivityHour, format = "%H:%M:%S")) %>% 
+  mutate(weekday = weekdays(Date))
+```
+
+## Data visualization
+```{r}
+g1 <- ggplot(hourly_data, aes(x = StepTotal, y = Calories))+
+  geom_point(color = "#0072B2")+
+theme_classic()+
+  geom_smooth(aes(x = StepTotal, y = Calories), method = loess, formula = 'y ~ x', color = "#E69F00") +
+  theme(axis.text=element_text(size=10,face="bold" ),
+        axis.title=element_text(size=10,face="bold")) +
+  labs(x = "Total steps per hour", y = "Total calories burnt per hour (Kcal)")
+
+g2 <- ggplot(hourly_data, aes(x = StepTotal, y = TotalIntensity))+
+  geom_point(color = "#0072B2")+
+  theme_classic()+
+  geom_smooth(aes(x = StepTotal, y = TotalIntensity), method = loess, formula = 'y ~ x', color = "#E69F00") +
+  theme(axis.text=element_text(size=10,face="bold" ),
+        axis.title=element_text(size=10,face="bold"))+
+    labs(x = "Total steps per hour", y = "Total intensity per hour")
+
+g3 <- ggplot(hourly_data, aes(x = Calories, y = TotalIntensity))+
+  geom_point(color = "#0072B2")+ 
+  theme_classic()+
+  geom_smooth(aes(x = Calories, y = TotalIntensity), method = loess, formula = 'y ~ x', color = "#E69F00") +
+  theme(axis.text=element_text(size=10,face="bold" ),
+        axis.title=element_text(size=8,face="bold"))+
+      labs(x = "Total calories burnt per hour (Kcal)", y = "Total intensity per hour")
+
+hourly_data_figure <- ggarrange(g1,g2, g3, 
+                    labels = c("A", "B", "C"),
+                    ncol = 2, nrow = 2)
+
+annotate_figure(hourly_data_figure, top = text_grob("Relationship between hourly measured steps, calories and intensity", 
+               color = "#D55E00", face = "bold", size = 10))
+
+      
+
+```
+
+```{r}
+
+weekday_average <- hourly_data %>%  group_by(weekday) %>% summarize(average_calories = mean(Calories), average_steps = mean(StepTotal))
+
+weekday_average$weekday<-factor(weekday_average$weekday,levels = c("Sunday","Monday","Tuesday","Wednesday","Thursday","Friday", "Saturday"))
+
+
+ ggplot(weekday_average, aes(x = weekday, y = average_calories))+
+  geom_bar( color = "#0072B2", fill = "#0072B2", stat = "identity")+ 
+  theme_classic()+
+  theme(axis.text=element_text(size=10,face="bold" ),
+        axis.title=element_text(size=10,face="bold"))+
+      labs(x = "Week days", y = "Average calories burnt per hour (Kcal)")
+```
+
+Above graph demonstrates that on average less calories are burnt on Sundays compared to other days. 
+
+```{r}
+ 
+weekday_average$weekday<-factor(weekday_average$weekday,levels = c("Sunday","Monday","Tuesday","Wednesday","Thursday","Friday", "Saturday"))
+
+
+ggplot(weekday_average, aes(x = weekday, y = average_steps))+
+  geom_bar( color = "#0072B2", fill = "#0072B2",stat = "identity")+ 
+  theme_classic()+
+  theme(axis.text=element_text(size=10,face="bold" ),
+        axis.title=element_text(size=10,face="bold"))+
+      labs(x = "Week days", y = "Average steps taken per hour")
+```
+
+Above graphs represents that on average people take least number of steps per hour on Sunday compared to other days.
+
+# Act
+
+## Recommendations to the Bellabelt based on data trends
+
+##### The recommendations are based on leaf product
+
+* Fitbit data is from a watch and it has been reported that 45.93% of time, the participants were wearing the device less than 20 hours per day. This indicates that wearing a watch all the time is not feasible. Bellabelt can use this data to highlight the importance of __Leaf__, which is easy to wear could be worn in different forms like bracelet, necklace and clips. Waterproof products helps the customers to collect there 24 hours data and provide more insights into their health conditions.
+* Also we have noticed that there is high correlation (above 0.7) between calories burnt per day and total steps per day, total distance covered per day and very active distance covered per day. The company can use this data to attract customers, that by keeping the track of distance and steps, will help customers get motivated to do more workout and burn calories. 
+* Also based on the data, we have noticed that 40 % of the people take more than 30 mins to fall asleep and 62.5% people have BMI more than 24.5, which could be a health concern. Therefore using a device such as __Leaf__ will help customers track there sleeping behavior and health related data. Customers can then make informed decisions based on the data.
+* Company can target Sundays and let people know that on average people take less steps and burn less calories on Sundays. Company could target in their marketing that Sundays could be used to work on improving health. 
+* Increase in the sampling size for weight and other data could have provided better insights into the effect of daily activities on weight, BMI, and heart rate. This could also be used to guide maketing strategy. 
